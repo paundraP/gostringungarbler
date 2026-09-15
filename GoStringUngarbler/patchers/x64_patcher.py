@@ -15,7 +15,7 @@
 # ----------------------------------------------------------------------
 
 from .base_patcher import Patcher, Function, Patch
-from patterns import GarblerPattern
+from ..patterns import GarblerPattern
 import re
 import struct
 

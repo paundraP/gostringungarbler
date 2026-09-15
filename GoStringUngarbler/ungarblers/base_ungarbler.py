@@ -22,8 +22,8 @@ from unicorn.x86_const import *
 from capstone import *
 from capstone.x86 import *
 import logging as logger
-from patchers import Function
-from patterns import GarblerPattern, STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
+from ..patchers import Function
+from ..patterns import GarblerPattern, STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
 import lief
 
 class GoStringUngarbler(ABC):

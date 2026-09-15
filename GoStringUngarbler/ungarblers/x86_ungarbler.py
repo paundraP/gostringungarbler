@@ -21,10 +21,10 @@ from unicorn.x86_const import *
 from capstone import *
 from capstone.x86 import *
 import logging as logger
-from patchers import Function
+from ..patchers import Function
 import lief
 from .base_ungarbler import GoStringUngarbler
-from patterns import STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
+from ..patterns import STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
 
 class GoStringUngarblerX86(GoStringUngarbler):
     """

@@ -23,9 +23,9 @@ from capstone.arm64 import *
 import logging as logger
 import re
 import lief
-from patchers import Function
+from ..patchers import Function
 from .base_ungarbler import GoStringUngarbler
-from patterns import GarblerPattern, STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
+from ..patterns import GarblerPattern, STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
 
 class GoStringUngarblerARM64(GoStringUngarbler):
     """

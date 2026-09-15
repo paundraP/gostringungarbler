@@ -16,7 +16,7 @@
 
 from abc import ABC, abstractmethod
 from typing import List
-from patterns import GarblerPattern, STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
+from ..patterns import GarblerPattern, STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
 
 class Function:
     """

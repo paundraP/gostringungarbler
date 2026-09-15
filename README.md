@@ -19,13 +19,35 @@ This is not an officially supported Google product. This project is not eligible
 - pefile
 ```
 
-To install and use the tool:
+To install the command globally in an isolated environment (recommended):
+
+```console
+$ pipx install .
+$ gostringungarbler -i <inputfile> -o <outputfile> -s <stringdump>
+```
+
+You can also install this ARM64 fork directly without cloning it first:
+
+```console
+$ pipx install git+https://github.com/paundraP/gostringungarbler.git
+```
+
+Run `pipx ensurepath` once if the command is not found after installation.
+
+Alternatively, install it into the active Python environment:
+
+```console
+$ python3 -m pip install .
+$ gostringungarbler -i <inputfile> -o <outputfile> -s <stringdump>
+```
+
+To run directly from a source checkout without installing:
 
 ```console
 $ git clone https://github.com/mandiant/gostringungarbler.git
 $ cd gostringungarbler
 $ pip install -r requirements.txt
-$ python GoStringUngarbler -i <inputfile> -o <outputfile> -s <stringdump>
+$ python3 GoStringUngarbler -i <inputfile> -o <outputfile> -s <stringdump>
 ```
 
 ## Usage

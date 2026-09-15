@@ -15,13 +15,19 @@
 # ----------------------------------------------------------------------
 
 import argparse
+from pathlib import Path
+import sys
 from typing import Literal
 import lief
 import logging as logger
 import datetime
-import ungarblers
-import patterns
-import patchers
+
+if __package__:
+    from . import patchers, patterns, ungarblers
+else:
+    # Keep `python GoStringUngarbler ...` working from a source checkout.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from GoStringUngarbler import patchers, patterns, ungarblers
 
 def get_binary_architecture(lief_binary: lief.Binary) -> Literal['386', 'AMD64', 'ARM64']:
     """Get the binary architecture
