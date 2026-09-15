@@ -64,26 +64,24 @@ class PatcherARM64(Patcher):
 
         str_len = len(func.decrypted_string)
 
+        # Use a frame-free tail call so the patched code remains compatible
+        # with the original function's Go stack metadata. Creating a smaller
+        # replacement frame can corrupt LR when slicebytetostring grows the
+        # stack because pclntab still describes the original frame size.
+        #
         # layout of the patch (all instructions 4 bytes):
-        #   0:  str  x30, [sp, #-16]!     ; save the return address, the bl
-        #                                  ; below clobbers x30 (arm64 LR)
-        #   4:  adr  x1, <string>         ; string placed right after ret
-        #   8:  mov  x2, #len
-        #   12: mov  x0, xzr
-        #   16: bl   runtime.slicebytetostring
-        #   20: ldr  x30, [sp], #16       ; restore return address & sp
-        #   24: ret
-        #   28: <decrypted string bytes>
-        string_offset_in_patch = 28
+        #   0:  adr  x1, <string>
+        #   4:  mov  x2, #len
+        #   8:  mov  x0, xzr
+        #   12: b    runtime.slicebytetostring ; tail call, preserves x30
+        #   16: <decrypted string bytes>
+        string_offset_in_patch = 16
         string_va = func.func_start_va + string_offset_in_patch
 
         patch_data = b''
 
-        # str x30, [sp, #-16]! (pre-index store with writeback, keeps sp 16-byte aligned)
-        patch_data += b'\xFE\x0F\x1F\xF8'
-
         # adr x1, #imm21 (PC-relative, must be 4-byte aligned target)
-        imm21 = string_va - (func.func_start_va + 4)
+        imm21 = string_va - func.func_start_va
         if imm21 < 0 or imm21 > (1 << 21) - 1:
             raise Exception('adr offset out of range')
         immlo = imm21 & 0x3
@@ -98,19 +96,13 @@ class PatcherARM64(Patcher):
         # mov x0, xzr
         patch_data += b'\xE0\x03\x1F\xAA'
 
-        # bl runtime.slicebytetostring (imm26 is in 4-byte instruction words)
-        next_pc = func.func_start_va + 16
-        offset_words = (slicebytetostring_va - next_pc) >> 2
+        # b runtime.slicebytetostring (imm26 is in 4-byte instruction words)
+        branch_pc = func.func_start_va + 12
+        offset_words = (slicebytetostring_va - branch_pc) >> 2
         if not (-(1 << 25) <= offset_words < (1 << 25)):
-            raise Exception('bl offset out of range')
-        bl = 0x94000000 | (offset_words & 0x3FFFFFF)
-        patch_data += struct.pack('<I', bl)
-
-        # ldr x30, [sp], #16 (post-index load with writeback, restores original sp)
-        patch_data += b'\xFE\x07\x41\xF8'
-
-        # ret
-        patch_data += b'\xC0\x03\x5F\xD6'
+            raise Exception('branch offset out of range')
+        branch = 0x14000000 | (offset_words & 0x3FFFFFF)
+        patch_data += struct.pack('<I', branch)
 
         # append decrypted string right behind function
         patch_data += bytes(func.decrypted_string.encode('utf-8')) + b'\x00'

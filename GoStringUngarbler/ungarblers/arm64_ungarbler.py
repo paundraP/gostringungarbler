@@ -132,14 +132,26 @@ class GoStringUngarblerARM64(GoStringUngarbler):
             return
 
         try:
-            magic = struct.unpack('<I', pclntab_data[:4])[0]
-            if magic not in (0xFFFFFFF0, 0xFFFFFFF1):
-                logger.debug('Unsupported gopclntab magic: %s', hex(magic))
+            if (len(pclntab_data) < 72 or
+                    pclntab_data[4:6] != b'\x00\x00' or
+                    pclntab_data[6] not in (1, 2, 4) or
+                    pclntab_data[7] != 8):
+                logger.debug('Invalid 64-bit gopclntab header')
                 return
 
             # go 1.18+ header layout (after magic, pad, minLC, ptrSize):
             nfunc, nfiles, textStart, funcnameOff, cuOff, filetabOff, pctabOff, pclnOff = struct.unpack(
                 '<QQQQQQQQ', pclntab_data[8:8 + 64])
+
+            # Garble may replace the standard pclntab magic. Validate the
+            # structural fields instead of rejecting an otherwise valid table.
+            if (nfunc == 0 or nfunc > len(pclntab_data) // 8 or
+                    textStart == 0 or
+                    any(offset >= len(pclntab_data) for offset in
+                        (funcnameOff, cuOff, filetabOff, pctabOff, pclnOff)) or
+                    pclnOff + nfunc * 8 > len(pclntab_data)):
+                logger.debug('Invalid gopclntab offsets')
+                return
 
             targets = {
                 'runtime.newobject': 0,
@@ -150,9 +162,15 @@ class GoStringUngarblerARM64(GoStringUngarbler):
             for i in range(nfunc):
                 entryoff, funcoff = struct.unpack(
                     '<II', pclntab_data[pclnOff + i * 8: pclnOff + i * 8 + 8])
+                if pclnOff + funcoff + 8 > len(pclntab_data):
+                    continue
                 nameoff = struct.unpack(
                     '<i', pclntab_data[pclnOff + funcoff + 4: pclnOff + funcoff + 8])[0]
+                if not 0 <= funcnameOff + nameoff < len(pclntab_data):
+                    continue
                 name_end = pclntab_data.find(b'\x00', funcnameOff + nameoff)
+                if name_end == -1:
+                    continue
                 name = pclntab_data[funcnameOff + nameoff:name_end].decode('utf-8', 'replace')
                 if name in targets:
                     targets[name] = textStart + entryoff
@@ -188,8 +206,15 @@ class GoStringUngarblerARM64(GoStringUngarbler):
             logger.debug('Unicorn emulator is not initialized')
             return
 
+        # Unicorn retains register state between emulations. Clear the general
+        # registers so input-dependent branches do not inherit values from the
+        # previously decoded function.
+        for register in range(UC_ARM64_REG_X0, UC_ARM64_REG_X28):
+            self.unicorn_emu.reg_write(register, 0)
+
         self.unicorn_emu.reg_write(UC_ARM64_REG_SP, self.stack_base + self.stack_size // 2)
         self.unicorn_emu.reg_write(UC_ARM64_REG_FP, self.stack_base + self.stack_size // 2)
+        self.unicorn_emu.reg_write(UC_ARM64_REG_LR, 0)
 
         # R28 is the Go 'g' register on arm64
         self.unicorn_emu.reg_write(UC_ARM64_REG_X28, self.g_base)
@@ -245,11 +270,6 @@ class GoStringUngarblerARM64(GoStringUngarbler):
 
         # Get the current instruction
         instruction = next(self.capstone.disasm(uc.mem_read(address, size), address))
-
-        if instruction.mnemonic == 'ret':
-            # not supposed to ret since we don't emulate any subroutine
-            # or reach the ret insn of the decrypting subroutine
-            raise Exception("Not supposed to return")
 
         if instruction.mnemonic == 'bl':
             target = int(instruction.op_str[1:], 16)
