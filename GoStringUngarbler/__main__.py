@@ -23,10 +23,10 @@ import ungarblers
 import patterns
 import patchers
 
-def get_binary_architecture(lief_binary: lief.Binary) -> Literal['386', 'AMD64']:
+def get_binary_architecture(lief_binary: lief.Binary) -> Literal['386', 'AMD64', 'ARM64']:
     """Get the binary architecture
     Args:
-        lief_binary (lief.Binary): Binary object of the PE
+        lief_binary (lief.Binary): Binary object of the PE/ELF/Mach-O
 
     Raises:
         Exception: Architecture not supported
@@ -39,12 +39,22 @@ def get_binary_architecture(lief_binary: lief.Binary) -> Literal['386', 'AMD64']
             return '386'
         elif lief_binary.header.machine == lief.PE.Header.MACHINE_TYPES.AMD64:
             return 'AMD64'
+        elif lief_binary.header.machine == lief.PE.Header.MACHINE_TYPES.ARM64:
+            return 'ARM64'
 
     elif isinstance(lief_binary, lief.ELF.Binary):
         if lief_binary.header.identity_class == lief.ELF.Header.CLASS.ELF32.value:
+            if lief_binary.header.machine_type == lief.ELF.Header.MACHINE_TYPE.ARM:
+                return '386'
             return '386'
         elif lief_binary.header.identity_class == lief.ELF.Header.CLASS.ELF64.value:
+            if lief_binary.header.machine_type == lief.ELF.Header.MACHINE_TYPE.AARCH64:
+                return 'ARM64'
             return 'AMD64'
+
+    elif isinstance(lief_binary, lief.MachO.Binary):
+        if lief_binary.header.cpu_type == lief.MachO.Header.CPU_TYPE.ARM64:
+            return 'ARM64'
 
     raise Exception("Architecture not supported")
 
@@ -83,6 +93,10 @@ def main() -> None:
         ungarbler = ungarblers.GoStringUngarblerX64(lief_binary, input_data)
         garble_pattern = patterns.GarblerPatternX64(input_data)
         patcher_engine = patchers.PatcherX64(garble_pattern)
+    elif pe_architecture == 'ARM64':
+        ungarbler = ungarblers.GoStringUngarblerARM64(lief_binary, input_data)
+        garble_pattern = patterns.GarblerPatternARM64(input_data)
+        patcher_engine = patchers.PatcherARM64(garble_pattern)
     
     start = datetime.datetime.now()
     

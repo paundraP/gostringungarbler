@@ -17,9 +17,11 @@
 from .base_ungarbler import GoStringUngarbler
 from .x64_ungarbler import GoStringUngarblerX64
 from .x86_ungarbler import GoStringUngarblerX86
+from .arm64_ungarbler import GoStringUngarblerARM64
 
 __all__ = [
-    'GoStringUngarbler'
-    'GoStringUngarblerX64'
-    'GoStringUngarblerX86'
+    'GoStringUngarbler',
+    'GoStringUngarblerX64',
+    'GoStringUngarblerX86',
+    'GoStringUngarblerARM64',
 ]

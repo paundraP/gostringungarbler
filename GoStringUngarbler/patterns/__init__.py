@@ -17,12 +17,14 @@
 from .base_pattern import GarblerPattern, STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
 from .x64_pattern import GarblerPatternX64
 from .x86_pattern import GarblerPatternX86
+from .arm64_pattern import GarblerPatternARM64
 
 __all__ = [
-    'GarblerPattern'
-    'GarblerPatternX64'
-    'GarblerPatternX86'
-    'STACK_STRING_DECRYPTION'
-    'SPLIT_STRING_DECRYPTION'
-    'SEED_STRING_DECRYPTION'
+    'GarblerPattern',
+    'GarblerPatternX64',
+    'GarblerPatternX86',
+    'GarblerPatternARM64',
+    'STACK_STRING_DECRYPTION',
+    'SPLIT_STRING_DECRYPTION',
+    'SEED_STRING_DECRYPTION',
 ]
