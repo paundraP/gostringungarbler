@@ -390,6 +390,135 @@ class GoStringUngarblerARM64(GoStringUngarbler):
                             return True
         return False
 
+    def _find_inline_split_decryption_routines(
+            self,
+            text_section_data: bytes,
+            text_section_va: int,
+            text_section_offset: int,
+            garble_pattern: GarblerPattern) -> None:
+        """Find split-string loops whose conversion call is mid-function.
+
+        These sites cannot safely be replaced as complete functions because
+        execution continues after runtime.slicebytetostring. They are still
+        useful extraction targets, so validate them with emulation and mark
+        them as non-patchable.
+        """
+
+        if self.slicebytetostring_va == 0:
+            return
+
+        instructions = []
+        for offset in range(0, len(text_section_data) - 3, 4):
+            decoded = list(self.capstone.disasm(
+                text_section_data[offset:offset + 4],
+                text_section_va + offset,
+                count=1))
+            instructions.append(decoded[0] if decoded else None)
+
+        existing_stops = {func.emu_stop_va for func in self.decrypt_func_list}
+
+        for index, call in enumerate(instructions):
+            if call is None or call.mnemonic != 'bl' or index < 3:
+                continue
+
+            try:
+                call_target = int(call.op_str.lstrip('#'), 16)
+            except ValueError:
+                continue
+
+            if call_target != self.slicebytetostring_va or call.address in existing_stops:
+                continue
+
+            mov_buf, add_data, mov_len = instructions[index - 3:index]
+            if any(instruction is None for instruction in (mov_buf, add_data, mov_len)):
+                continue
+            if not (
+                    mov_buf.mnemonic == 'mov' and mov_buf.op_str == 'x0, xzr' and
+                    add_data.mnemonic == 'add' and add_data.op_str.startswith('x1, sp,') and
+                    mov_len.mnemonic == 'mov' and mov_len.op_str.startswith('x2, #')):
+                continue
+
+            # Require Garble's byte-at-a-time split loop rather than treating
+            # every ordinary slicebytetostring call as an obfuscation site.
+            window = [instruction for instruction in instructions[max(0, index - 64):index - 3]
+                      if instruction is not None]
+            backward_branches = []
+            for instruction in window:
+                if instruction.mnemonic not in ('b.lt', 'b.lo', 'b.ne', 'b.le', 'cbnz'):
+                    continue
+                try:
+                    branch_target = int(instruction.op_str.split(',')[-1].strip().lstrip('#'), 16)
+                except ValueError:
+                    continue
+                if branch_target < instruction.address:
+                    backward_branches.append((instruction, branch_target))
+
+            if not backward_branches:
+                continue
+
+            loop_end, loop_start = backward_branches[-1]
+            loop_instructions = [instruction for instruction in window
+                                 if loop_start <= instruction.address <= loop_end.address]
+            if not (
+                    sum(instruction.mnemonic == 'ldrb' for instruction in loop_instructions) >= 2 and
+                    any(instruction.mnemonic in ('sub', 'eor', 'add')
+                        for instruction in loop_instructions) and
+                    any(instruction.mnemonic == 'strb' for instruction in loop_instructions)):
+                continue
+
+            call_offset = call.address - text_section_va
+            prologue_matches = list(garble_pattern.prologue_pattern.finditer(
+                text_section_data,
+                max(0, call_offset - 0x1000),
+                call_offset))
+            if not prologue_matches:
+                continue
+
+            prologue = prologue_matches[-1]
+            function_start_va = text_section_va + prologue.start()
+
+            # Preserve the enclosing function's frame setup. First try the
+            # body entry, then retry immediately after earlier calls; inline
+            # decryptions commonly follow an unrelated call whose result is
+            # consumed only after string conversion.
+            body_start_va = function_start_va + len(prologue.group()) + 12
+            candidate_starts = [body_start_va]
+            candidate_starts.extend(
+                instruction.address + 4
+                for instruction in window
+                if (instruction.mnemonic == 'bl' and
+                    body_start_va <= instruction.address < loop_start))
+
+            for emulation_start_va in dict.fromkeys(candidate_starts):
+                start_relative_offset = emulation_start_va - text_section_va
+                if start_relative_offset < 0 or emulation_start_va >= call.address:
+                    continue
+
+                func_data = text_section_data[start_relative_offset:call_offset + 4]
+                inline_func = Function(
+                    func_data,
+                    text_section_offset + start_relative_offset,
+                    emulation_start_va,
+                    emulation_start_va,
+                    call.address + 3,
+                    call.address,
+                    SPLIT_STRING_DECRYPTION,
+                    patchable=False)
+
+                try:
+                    decrypted_string = self.emulate(inline_func)
+                except Exception:
+                    continue
+
+                if not decrypted_string:
+                    continue
+
+                inline_func.set_decrypted_string(decrypted_string)
+                self.decrypt_func_list.append(inline_func)
+                self.split_func_count += 1
+                existing_stops.add(call.address)
+                break
+
     def find_string_decryption_routine(self, decrypt_type: int, garble_pattern: GarblerPattern):
         """
         Function to find all decryption routine (arm64)
@@ -522,3 +651,9 @@ class GoStringUngarblerARM64(GoStringUngarbler):
                 self.seed_func_count += 1
             else:
                 raise Exception('Wrong decryption type')
+
+        self._find_inline_split_decryption_routines(
+            text_section_data,
+            text_section_va,
+            text_section_offset,
+            garble_pattern)

@@ -58,7 +58,7 @@ class Function:
         SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION
     """
 
-    def __init__(self, data: bytes=None, func_start_offset: int=0, func_start_va: int=0, func_start_emu_va: int=0, func_end_va: int=0, emu_stop_va: int=0, type: int=STACK_STRING_DECRYPTION):
+    def __init__(self, data: bytes=None, func_start_offset: int=0, func_start_va: int=0, func_start_emu_va: int=0, func_end_va: int=0, emu_stop_va: int=0, type: int=STACK_STRING_DECRYPTION, patchable: bool=True):
         """
         Constructor for Function class
 
@@ -70,6 +70,7 @@ class Function:
             func_end_va (int, optional): Function end virtual address. Defaults to 0.
             emu_stop_va (int, optional): Virtual address to stop emulation. Defaults to 0.
             type (int, optional): Type of decryption. Defaults to pattern.STACK_STRING_DECRYPTION
+            patchable (bool, optional): Whether the complete function may be safely replaced. Defaults to True.
         """
         
         self.data = data
@@ -80,6 +81,7 @@ class Function:
         self.decrypted_string = ''
         self.emu_stop_va = emu_stop_va
         self.type = type
+        self.patchable = patchable
         if self.type not in [STACK_STRING_DECRYPTION, SPLIT_STRING_DECRYPTION, SEED_STRING_DECRYPTION]:
             raise Exception("Decryption type invalid")
         

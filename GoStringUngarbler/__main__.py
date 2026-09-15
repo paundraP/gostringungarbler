@@ -116,12 +116,15 @@ def main() -> None:
     for i in range(len(ungarbler.decrypt_func_list)):
         func = ungarbler.decrypt_func_list[i]
         try:
-            decrypted_str = ungarbler.emulate(func)
+            # Inline ARM64 strings are validated during discovery because the
+            # detector may need to try several safe emulation entry points.
+            decrypted_str = func.decrypted_string or ungarbler.emulate(func)
 
             if len(decrypted_str) != 0:
                 func.set_decrypted_string(decrypted_str)
                 logger.info('%s in %s | result at 0x%x: %s', str(i + 1), str(len(ungarbler.decrypt_func_list)), func.func_start_va, repr(decrypted_str))
-                patcher_engine.generate_patch(func)
+                if func.patchable:
+                    patcher_engine.generate_patch(func)
         except Exception as e:
             logger.debug('Emulation error: %s', str(e))
             error_list_func.append(func)
@@ -132,11 +135,13 @@ def main() -> None:
     logger.info("Stack obfuscated string count: %d strings.", ungarbler.stack_func_count)
     logger.info("Split obfuscated string count: %d strings.", ungarbler.split_func_count)
     logger.info("Seed obfuscated string count: %d strings.", ungarbler.seed_func_count)
+    logger.info("Inline extract-only string count: %d strings.",
+                sum(not func.patchable for func in ungarbler.decrypt_func_list))
     
     # if -o/--output is provided, perform patching
     if args.output is not None:
         try:
-            logger.info('Done generating patches for %d functions. Applying patches to %s', len(ungarbler.decrypt_func_list) - error_count, args.output)
+            logger.info('Done generating patches for %d functions. Applying patches to %s', len(patcher_engine.patches), args.output)
             
             # create output file by copying input file to output
             output_data = patcher_engine.apply_patches(input_data)

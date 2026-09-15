@@ -73,6 +73,11 @@ The ```"-o"``` command-line argument can be provided to specify the output file 
 
 The ```"-s"``` command-line argument can be provided to specify the file path to dump strings. The program will write the list of all extracted strings here.
 
+On ARM64, string transformations embedded inside a larger function are also
+included in the string dump. These inline sites are extraction-only: the tool
+does not replace their enclosing function when generating a patched binary,
+because execution continues after the string conversion call.
+
 ## Features
 
 Currently supporting Windows (PE) & Linux (ELF) binaries obfuscated with Garble v0.11.0 to v0.13.0 and Go v1.21 to v1.23.
